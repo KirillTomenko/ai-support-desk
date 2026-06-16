@@ -1,4 +1,4 @@
-# AI Support Inbox
+# AI Support Desk
 
 Production-ready FastAPI проект для анализа обращений в поддержку с помощью LLM, Telegram-ботом и Streamlit dashboard.
 
