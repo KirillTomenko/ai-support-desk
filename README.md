@@ -1,4 +1,5 @@
 # AI Support Desk
+*система автоматизации клиентской поддержки*
 
 Production-ready FastAPI проект для анализа обращений в поддержку с помощью LLM, Telegram-ботом и Streamlit dashboard.
 
