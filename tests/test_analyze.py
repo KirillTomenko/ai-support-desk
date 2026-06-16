@@ -1,4 +1,7 @@
 from collections.abc import Generator
+import os
+
+os.environ["DATABASE_URL"] = "sqlite://"
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -48,7 +51,13 @@ client = TestClient(app)
 
 
 def test_analyze_returns_structured_response() -> None:
-    response = client.post("/analyze", json={"message": "I cannot log in."})
+    response = client.post(
+        "/analyze",
+        json={
+            "message": "I cannot log in.",
+            "customer_external_id": "test-customer",
+        },
+    )
 
     assert response.status_code == 200
     assert response.json() == {

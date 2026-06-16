@@ -3,13 +3,12 @@ from fastapi import FastAPI
 from app.api.routes.analyze import router as analyze_router
 from app.core.config import settings
 from app.core.logging import configure_logging
-from app.db.base import Base
-from app.db.session import engine
+from app.db.init_db import init_db
 
 
 def create_app() -> FastAPI:
     configure_logging()
-    Base.metadata.create_all(bind=engine)
+    init_db()
 
     application = FastAPI(
         title=settings.app_name,

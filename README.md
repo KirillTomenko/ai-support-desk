@@ -1,73 +1,220 @@
 # AI Support Inbox
 
-Production-ready FastAPI сервис для анализа входящих обращений в службу поддержки с помощью LLM через OpenAI-compatible API.
+Production-ready FastAPI проект для анализа обращений в поддержку с помощью LLM, Telegram-ботом и Streamlit dashboard.
 
-Сервис принимает текст сообщения клиента, определяет категорию и приоритет, формирует краткое резюме и черновик ответа для оператора поддержки.
+Сервис принимает сообщение клиента, определяет категорию и приоритет, формирует краткое резюме и черновик ответа. Все обращения сохраняются как тикеты в Supabase PostgreSQL через SQLAlchemy.
 
 ## Возможности
 
 - REST API на FastAPI
-- SQLite через SQLAlchemy
 - Интеграция с OpenAI API или OpenAI-compatible proxy API
-- Сохранение результатов анализа в базе данных
-- Модульная структура проекта
-- Dockerfile для запуска в контейнере
-- Health check endpoint
+- Telegram-бот на `aiogram`
+- Streamlit dashboard со статистикой обращений
+- Supabase PostgreSQL вместо SQLite
+- SQLAlchemy ORM
+- Таблицы `customers`, `tickets`, `ticket_history`
+- Dockerfile и Docker Compose
 - Тестовый контур для API
 
 ## Скриншоты и демо
 
-В репозитории предусмотрены места для наглядных материалов. После запуска проекта можно добавить скриншоты Swagger UI, примеры запросов или короткую GIF-демонстрацию.
-
-Рекомендуемая структура:
+В проекте уже созданы папки для наглядных материалов:
 
 ```text
 docs/
   screenshots/
     swagger.png
-    analyze-request.png
-    analyze-response.png
+    dashboard.png
+    telegram-bot.png
   demo/
     api-demo.gif
 ```
 
-Пример вставки скриншотов в README:
+После запуска проекта можно добавить изображения и вставить их так:
 
 ```markdown
 ![Swagger UI](docs/screenshots/swagger.png)
-![Analyze request](docs/screenshots/analyze-request.png)
-![Analyze response](docs/screenshots/analyze-response.png)
-```
-
-Пример вставки демо:
-
-```markdown
+![Dashboard](docs/screenshots/dashboard.png)
+![Telegram bot](docs/screenshots/telegram-bot.png)
 ![API demo](docs/demo/api-demo.gif)
 ```
 
-После добавления файлов можно раскомментировать или вставить эти блоки ниже:
+Готовый блок для будущей вставки:
 
 <!--
 ![Swagger UI](docs/screenshots/swagger.png)
 
-![Analyze request](docs/screenshots/analyze-request.png)
+![Dashboard](docs/screenshots/dashboard.png)
 
-![Analyze response](docs/screenshots/analyze-response.png)
+![Telegram bot](docs/screenshots/telegram-bot.png)
 
 ![API demo](docs/demo/api-demo.gif)
 -->
 
-## API
+## Архитектура
+
+```text
+app/
+  api/
+    routes/
+      analyze.py
+  core/
+    config.py
+    logging.py
+  dashboard/
+    main.py
+  db/
+    base.py
+    init_db.py
+    session.py
+  models/
+    analysis.py
+  repositories/
+    tickets.py
+  schemas/
+    analysis.py
+  services/
+    analyzer.py
+    tickets.py
+  telegram/
+    bot.py
+  main.py
+tests/
+  test_analyze.py
+docker-compose.yml
+Dockerfile
+```
+
+## Модель данных
+
+### `customers`
+
+Хранит клиентов из разных источников: API, Telegram и будущих интеграций.
+
+Ключевые поля:
+
+| Поле | Описание |
+| --- | --- |
+| `id` | Внутренний ID клиента |
+| `source` | Источник клиента, например `api` или `telegram` |
+| `external_id` | ID клиента во внешней системе |
+| `username`, `first_name`, `last_name`, `email` | Данные клиента |
+| `created_at`, `updated_at` | Временные метки |
+
+### `tickets`
+
+Хранит обращения клиентов и результат AI-анализа.
+
+Ключевые поля:
+
+| Поле | Описание |
+| --- | --- |
+| `id` | ID тикета |
+| `customer_id` | Ссылка на клиента |
+| `source` | Источник обращения |
+| `status` | Статус тикета, по умолчанию `new` |
+| `message` | Исходное сообщение клиента |
+| `category` | Категория обращения |
+| `priority` | Приоритет обращения |
+| `summary` | Краткое резюме |
+| `draft_reply` | Черновик ответа |
+| `created_at`, `updated_at` | Временные метки |
+
+### `ticket_history`
+
+Хранит историю событий по тикетам.
+
+Ключевые поля:
+
+| Поле | Описание |
+| --- | --- |
+| `ticket_id` | Ссылка на тикет |
+| `event_type` | Тип события, например `created` |
+| `from_status`, `to_status` | Изменение статуса |
+| `note` | Комментарий к событию |
+| `created_at` | Дата события |
+
+## Настройка Supabase
+
+1. Создайте проект в Supabase.
+
+2. Откройте раздел подключения к базе данных:
+
+```text
+Project Settings -> Database -> Connection string
+```
+
+или кнопку `Connect` в панели Supabase.
+
+3. Выберите строку подключения для Postgres. Для backend-приложений обычно подходит pooled connection string через Supavisor. Если окружение поддерживает IPv6, можно использовать direct connection.
+
+4. Приведите строку подключения к формату SQLAlchemy:
+
+```env
+DATABASE_URL=postgresql+psycopg://postgres.your-project-ref:your-password@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require
+```
+
+5. Если пароль содержит специальные символы, URL-encode его. Например `@` нужно заменить на `%40`.
+
+Таблицы создаются автоматически при старте API или Telegram-бота через `SQLAlchemy Base.metadata.create_all`.
+
+Документация Supabase по подключению к Postgres: [supabase.com/docs/guides/database/connecting-to-postgres](https://supabase.com/docs/guides/database/connecting-to-postgres).
+
+## Переменные окружения
+
+Создайте `.env` из примера:
+
+```bash
+cp .env.example .env
+```
+
+Заполните значения:
+
+```env
+APP_NAME=AI Support Inbox
+APP_ENV=development
+
+DATABASE_URL=postgresql+psycopg://postgres.your-project-ref:your-password@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require
+
+OPENAI_API_KEY=your-openai-or-proxy-api-key
+OPENAI_BASE_URL=https://your-proxy.example.com/v1
+OPENAI_MODEL=gpt-4.1-mini
+
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+```
+
+| Переменная | Описание |
+| --- | --- |
+| `APP_NAME` | Название приложения в FastAPI |
+| `APP_ENV` | Окружение запуска |
+| `DATABASE_URL` | Supabase PostgreSQL connection string для SQLAlchemy |
+| `OPENAI_API_KEY` | API-ключ OpenAI или proxy API |
+| `OPENAI_BASE_URL` | Base URL OpenAI-compatible proxy API, если используется |
+| `OPENAI_MODEL` | Модель для анализа обращений |
+| `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота от BotFather |
+
+## REST API
 
 ### `POST /analyze`
 
-Анализирует сообщение клиента и возвращает структурированный результат.
+Анализирует сообщение и сохраняет тикет в PostgreSQL.
 
-Запрос:
+Минимальный запрос:
 
 ```json
 {
   "message": "I cannot log into my account and need help urgently."
+}
+```
+
+Расширенный запрос:
+
+```json
+{
+  "message": "I cannot log into my account and need help urgently.",
+  "customer_external_id": "customer-123",
+  "customer_email": "customer@example.com",
+  "customer_name": "Alex"
 }
 ```
 
@@ -82,20 +229,7 @@ docs/
 }
 ```
 
-Поля ответа:
-
-| Поле | Описание |
-| --- | --- |
-| `category` | Категория обращения, например `billing`, `account_access`, `bug_report` |
-| `priority` | Приоритет: `low`, `medium`, `high`, `urgent` |
-| `summary` | Краткое резюме обращения |
-| `draft_reply` | Черновик ответа клиенту |
-
 ### `GET /health`
-
-Проверка доступности сервиса.
-
-Ответ:
 
 ```json
 {
@@ -103,159 +237,98 @@ docs/
 }
 ```
 
-## Быстрый старт
-
-### 1. Создать виртуальное окружение
+## Локальный запуск
 
 Проект рассчитан на Python 3.12.
 
 ```powershell
 py -3.12 -m venv .venv
-```
-
-### 2. Активировать окружение
-
-Windows PowerShell:
-
-```powershell
 .venv\Scripts\Activate.ps1
-```
-
-macOS/Linux:
-
-```bash
-source .venv/bin/activate
-```
-
-### 3. Установить зависимости
-
-```bash
 pip install -r requirements.txt
-```
-
-### 4. Настроить переменные окружения
-
-Скопируйте пример конфигурации:
-
-```bash
-cp .env.example .env
-```
-
-Для обычного OpenAI API достаточно указать:
-
-```env
-OPENAI_API_KEY=your-openai-api-key
-OPENAI_MODEL=gpt-4.1-mini
-```
-
-Если доступ к LLM идет через proxy API, укажите `OPENAI_BASE_URL`:
-
-```env
-OPENAI_API_KEY=your-proxy-api-key
-OPENAI_BASE_URL=https://your-proxy.example.com/v1
-OPENAI_MODEL=gpt-4.1-mini
-```
-
-### 5. Запустить API
-
-```bash
 uvicorn app.main:app --reload
 ```
 
-Документация Swagger UI будет доступна по адресу:
+Swagger UI:
 
 ```text
 http://localhost:8000/docs
 ```
 
-## Пример запроса
+## Telegram-бот
+
+1. Создайте бота через BotFather.
+2. Укажите токен в `.env`:
+
+```env
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+```
+
+3. Запустите polling:
 
 ```bash
-curl -X POST "http://localhost:8000/analyze" \
-  -H "Content-Type: application/json" \
-  -d "{\"message\":\"I cannot log into my account and need help urgently.\"}"
+python -m app.telegram.bot
+```
+
+Пользователь отправляет сообщение боту, бот анализирует обращение, сохраняет тикет и возвращает категорию, приоритет, резюме и черновик ответа.
+
+## Streamlit Dashboard
+
+Запуск dashboard:
+
+```bash
+streamlit run app/dashboard/main.py
+```
+
+Интерфейс будет доступен по адресу:
+
+```text
+http://localhost:8501
+```
+
+Dashboard показывает:
+
+- общее количество тикетов
+- количество новых обращений
+- количество `urgent` и `high` обращений
+- распределение по категориям
+- распределение по приоритетам
+- таблицу последних обращений
+
+## Docker Compose
+
+Запуск всех сервисов:
+
+```bash
+docker compose up --build
+```
+
+Сервисы:
+
+| Сервис | Порт | Описание |
+| --- | --- | --- |
+| `api` | `8000` | FastAPI REST API |
+| `telegram-bot` | - | Telegram polling bot |
+| `dashboard` | `8501` | Streamlit dashboard |
+
+После запуска:
+
+```text
+API: http://localhost:8000
+Swagger: http://localhost:8000/docs
+Dashboard: http://localhost:8501
 ```
 
 ## Тесты
 
-Установите dev-зависимости:
+Для тестов используется in-memory SQLite, чтобы не зависеть от Supabase.
 
 ```bash
 pip install -r requirements-dev.txt
-```
-
-Запустите тесты:
-
-```bash
 pytest
 ```
 
-## Docker
-
-Сборка образа:
-
-```bash
-docker build -t ai-support-inbox .
-```
-
-Запуск контейнера:
-
-```bash
-docker run --rm -p 8000:8000 --env-file .env ai-support-inbox
-```
-
-После запуска API будет доступен по адресу:
-
-```text
-http://localhost:8000
-```
-
-## Переменные окружения
-
-| Переменная | Значение по умолчанию | Описание |
-| --- | --- | --- |
-| `APP_NAME` | `AI Support Inbox` | Название приложения в FastAPI |
-| `APP_ENV` | `development` | Окружение запуска |
-| `DATABASE_URL` | `sqlite:///./data/support_inbox.db` | URL подключения SQLAlchemy |
-| `OPENAI_API_KEY` | пусто | API-ключ OpenAI или proxy API |
-| `OPENAI_BASE_URL` | пусто | Base URL OpenAI-compatible proxy API |
-| `OPENAI_MODEL` | `gpt-4.1-mini` | Модель для анализа обращений |
-
-## Структура проекта
-
-```text
-app/
-  api/
-    routes/
-      analyze.py
-  core/
-    config.py
-    logging.py
-  db/
-    base.py
-    session.py
-  models/
-    analysis.py
-  schemas/
-    analysis.py
-  services/
-    analyzer.py
-  main.py
-tests/
-  test_analyze.py
-```
-
-## Архитектура
-
-- `app/api/routes` содержит REST endpoints.
-- `app/schemas` содержит Pydantic-схемы запросов и ответов.
-- `app/models` содержит SQLAlchemy-модели.
-- `app/db` отвечает за подключение к базе данных и сессии.
-- `app/services` содержит бизнес-логику анализа сообщений.
-- `app/core` содержит конфигурацию и инфраструктурные настройки.
-
 ## Поведение без API-ключа
 
-Если `OPENAI_API_KEY` не задан, сервис использует локальный fallback-анализатор. Это удобно для локального запуска, тестирования Docker-образа и демонстрации API без реального LLM-запроса.
+Если `OPENAI_API_KEY` не задан, сервис использует локальный fallback-анализатор. Это удобно для проверки API, Telegram-бота и dashboard без реального LLM-запроса.
 
-В production-режиме рекомендуется всегда задавать `OPENAI_API_KEY`, `OPENAI_MODEL` и при необходимости `OPENAI_BASE_URL`.
+В production-режиме рекомендуется всегда задавать `OPENAI_API_KEY`, `OPENAI_MODEL`, `DATABASE_URL` и при необходимости `OPENAI_BASE_URL`.
